@@ -297,13 +297,13 @@ func (p *Pool) returnConn(c *conn, lastErr error) (err error) {
 	if lastErr != nil {
 		// Any error, except for textproto.Error (according to jordan-wright/email),
 		// is a bad connection that should be killed.
-	if isTerminalConnErr(lastErr) {
-		return lastErr
+		if isTerminalConnErr(lastErr) {
+			return lastErr
+		}
+		if _, ok := lastErr.(*textproto.Error); !ok {
+			return lastErr
+		}
 	}
-	if _, ok := lastErr.(*textproto.Error); !ok {
-		return lastErr
-	}
-}
 
 
 	// Always RSET (SMTP) the connection bfeore reusing it as some servers
@@ -503,6 +503,9 @@ func canRetry(err error) bool {
 	return false
 }
 
+// isTerminalConnErr reports whether the SMTP connection is no longer usable
+// and must be discarded. This is independent of whether the message itself
+// is retryable.
 func isTerminalConnErr(err error) bool {
 	if err == nil {
 		return false
