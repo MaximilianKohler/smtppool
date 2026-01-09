@@ -297,10 +297,14 @@ func (p *Pool) returnConn(c *conn, lastErr error) (err error) {
 	if lastErr != nil {
 		// Any error, except for textproto.Error (according to jordan-wright/email),
 		// is a bad connection that should be killed.
-		if _, ok := lastErr.(*textproto.Error); !ok {
-			return lastErr
-		}
+	if isTerminalConnErr(lastErr) {
+		return lastErr
 	}
+	if _, ok := lastErr.(*textproto.Error); !ok {
+		return lastErr
+	}
+}
+
 
 	// Always RSET (SMTP) the connection bfeore reusing it as some servers
 	// throw "sender already specified", or "commands out of sequence" errors.
@@ -493,6 +497,30 @@ func canRetry(err error) bool {
 	} else if _, ok := err.(*net.OpError); ok {
 		return true
 	} else if err == io.EOF {
+		return true
+	}
+
+	return false
+}
+
+func isTerminalConnErr(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// RFC 5321: 421 = Service not available, closing transmission channel
+	var tpErr *textproto.Error
+	if errors.As(err, &tpErr) && tpErr.Code == 421 {
+		return true
+	}
+
+	// Connection-level failures
+	if errors.Is(err, io.EOF) {
+		return true
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
 		return true
 	}
 
